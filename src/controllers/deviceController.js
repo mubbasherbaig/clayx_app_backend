@@ -168,12 +168,11 @@ exports.deleteDevice = async (req, res) => {
 };
 exports.getPumpCommand = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const deviceId = req.params.id;
 
     const result = await pool.query(
-      'SELECT pump_command FROM devices WHERE device_id = $1 AND user_id = $2',
-      [deviceId, userId]
+      'SELECT pump_command FROM devices WHERE device_id = $1',
+      [deviceId]
     );
 
     if (result.rows.length === 0) {
@@ -196,10 +195,8 @@ exports.getPumpCommand = async (req, res) => {
   }
 };
 
-// Set pump command for a device
 exports.setPumpCommand = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const deviceId = req.params.id;
     const { pump } = req.body;
 
@@ -211,8 +208,8 @@ exports.setPumpCommand = async (req, res) => {
     }
 
     const result = await pool.query(
-      'UPDATE devices SET pump_command = $1 WHERE device_id = $2 AND user_id = $3 RETURNING *',
-      [pump, deviceId, userId]
+      'UPDATE devices SET pump_command = $1 WHERE device_id = $2 RETURNING *',
+      [pump, deviceId]
     );
 
     if (result.rows.length === 0) {
