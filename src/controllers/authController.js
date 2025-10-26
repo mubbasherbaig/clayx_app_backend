@@ -77,8 +77,11 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('Login attempt:', { email, password: '***' });
+
     // Validation
     if (!email || !password) {
+      console.log('Missing email or password');
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password',
@@ -91,7 +94,14 @@ exports.login = async (req, res) => {
       [email]
     );
 
+    console.log('User query result:', {
+      found: result.rows.length > 0,
+      email: email,
+      rowCount: result.rows.length
+    });
+
     if (result.rows.length === 0) {
+      console.log('User not found in database');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -99,11 +109,14 @@ exports.login = async (req, res) => {
     }
 
     const user = result.rows[0];
+    console.log('User found:', { id: user.id, email: user.email });
 
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    console.log('Password comparison result:', isPasswordValid);
 
     if (!isPasswordValid) {
+      console.log('Password invalid');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -112,6 +125,8 @@ exports.login = async (req, res) => {
 
     // Generate token
     const token = generateToken(user.id);
+
+    console.log('Login successful for user:', user.email);
 
     res.status(200).json({
       success: true,
