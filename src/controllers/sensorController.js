@@ -187,3 +187,119 @@ exports.getDeviceCommands = async (req, res) => {
     });
   }
 };
+// Send command to device (from app)
+exports.sendDeviceCommand = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { deviceId, commandType, commandValue } = req.body;
+
+    if (!deviceId || !commandType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Device ID and command type are required',
+      });
+    }
+
+    // Verify device belongs to user
+    const deviceCheck = await pool.query(
+      'SELECT d.id FROM devices d WHERE d.device_id = $1 AND d.user_id = $2',
+      [deviceId, userId]
+    );
+
+    if (deviceCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found or access denied',
+      });
+    }
+
+    // Insert command
+    const result = await pool.query(
+      `INSERT INTO device_commands (device_id, command_type, command_value)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [deviceCheck.rows[0].id, commandType, commandValue]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Command sent to device',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Send device command error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+// Get pending commands for device (ESP32 polls this - NO AUTH)
+exports.getDeviceCommands = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+
+    // Get device
+    const deviceResult = await pool.query(
+      'SELECT id FROM devices WHERE device_id = $1',
+      [deviceId]
+    );
+
+    if (deviceResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    const dbDeviceId = deviceResult.rows[0].id;
+
+    // Get pending commands
+    const commands = await pool.query(
+      `SELECT id, command_type, command_value 
+       FROM device_commands 
+       WHERE device_id = $1 AND executed = false 
+       ORDER BY created_at ASC`,
+      [dbDeviceId]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        commands: commands.rows,
+      },
+    });
+  } catch (error) {
+    console.error('Get device commands error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+// Mark command as executed (ESP32 calls this after executing - NO AUTH)
+exports.markCommandExecuted = async (req, res) => {
+  try {
+    const { commandId } = req.body;
+
+    await pool.query(
+      `UPDATE device_commands 
+       SET executed = true, executed_at = NOW() 
+       WHERE id = $1`,
+      [commandId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Command marked as executed',
+    });
+  } catch (error) {
+    console.error('Mark command executed error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
