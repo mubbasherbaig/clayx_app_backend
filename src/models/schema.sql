@@ -54,8 +54,20 @@ CREATE TABLE IF NOT EXISTS care_events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Device Commands Table (for tracking pump, light, etc.)
+CREATE TABLE IF NOT EXISTS device_commands (
+    id SERIAL PRIMARY KEY,
+    device_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+    command_type VARCHAR(50) NOT NULL, -- 'pump', 'light', etc.
+    command_value VARCHAR(50) NOT NULL, -- 'on', 'off', etc.
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'delivered', 'executed', 'failed'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_sensor_device ON sensor_readings(device_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_sensor_plant ON sensor_readings(plant_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_plants_user ON plants(user_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_commands_device ON device_commands(device_id, created_at DESC);
