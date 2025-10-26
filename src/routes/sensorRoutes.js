@@ -9,5 +9,6 @@ router.post('/data', sensorController.postSensorData);
 // Protected routes for app
 router.get('/plants/:plantId/latest', authMiddleware, sensorController.getLatestReading);
 router.get('/plants/:plantId/history', authMiddleware, sensorController.getHistoricalData);
+router.get('/device/:deviceId/commands', sensorController.getDeviceCommands);
 
 module.exports = router;

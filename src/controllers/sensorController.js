@@ -153,3 +153,37 @@ exports.getHistoricalData = async (req, res) => {
     });
   }
 };
+// Get latest control commands for device (NO AUTH REQUIRED)
+exports.getDeviceCommands = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+
+    // Get device info
+    const deviceResult = await pool.query(
+      'SELECT id, is_online FROM devices WHERE device_id = $1',
+      [deviceId]
+    );
+
+    if (deviceResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    // Return simple command structure for device
+    res.status(200).json({
+      success: true,
+      data: {
+        pumpOn: false, // Can be controlled from app later
+        interval: 30, // Seconds between readings
+      },
+    });
+  } catch (error) {
+    console.error('Get device commands error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
