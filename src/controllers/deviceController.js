@@ -166,28 +166,49 @@ exports.deleteDevice = async (req, res) => {
     });
   }
 };
-exports.getPumpCommand = async (req, res) => {
-  try {
-    const deviceId = req.params.id;
 
-    const result = await pool.query(
-      'SELECT pump_command FROM devices WHERE device_id = $1',
-      [deviceId]
+// Send command to device (NEW)
+exports.sendDeviceCommand = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const deviceId = req.params.id;
+    const { commandType, commandValue } = req.body;
+
+    if (!commandType || !commandValue) {
+      return res.status(400).json({
+        success: false,
+        message: 'Command type and value are required',
+      });
+    }
+
+    // Verify device belongs to user
+    const deviceCheck = await pool.query(
+      'SELECT id FROM devices WHERE id = $1 AND user_id = $2',
+      [deviceId, userId]
     );
 
-    if (result.rows.length === 0) {
+    if (deviceCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Device not found',
       });
     }
 
-    res.status(200).json({
+    // Insert command
+    const result = await pool.query(
+      `INSERT INTO device_commands (device_id, command_type, command_value, status)
+       VALUES ($1, $2, $3, 'pending')
+       RETURNING *`,
+      [deviceId, commandType, commandValue]
+    );
+
+    res.status(201).json({
       success: true,
-      pump: result.rows[0].pump_command || 'auto',
+      message: 'Command sent successfully',
+      data: result.rows[0],
     });
   } catch (error) {
-    console.error('Get pump command error:', error);
+    console.error('Send command error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -195,37 +216,127 @@ exports.getPumpCommand = async (req, res) => {
   }
 };
 
-exports.setPumpCommand = async (req, res) => {
+// Get latest command for device (NEW)
+exports.getLatestCommand = async (req, res) => {
   try {
+    const userId = req.user.userId;
     const deviceId = req.params.id;
-    const { pump } = req.body;
+    const { commandType } = req.query;
 
-    if (!['on', 'off', 'auto'].includes(pump)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid pump command. Use "on", "off", or "auto".',
-      });
-    }
-
-    const result = await pool.query(
-      'UPDATE devices SET pump_command = $1 WHERE device_id = $2 RETURNING *',
-      [pump, deviceId]
+    // Verify device belongs to user
+    const deviceCheck = await pool.query(
+      'SELECT id FROM devices WHERE id = $1 AND user_id = $2',
+      [deviceId, userId]
     );
 
-    if (result.rows.length === 0) {
+    if (deviceCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Device not found',
       });
     }
 
+    let query = 'SELECT * FROM device_commands WHERE device_id = $1';
+    const params = [deviceId];
+
+    if (commandType) {
+      query += ' AND command_type = $2';
+      params.push(commandType);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT 1';
+
+    const result = await pool.query(query, params);
+
     res.status(200).json({
       success: true,
-      message: 'Pump command updated',
+      data: result.rows[0] || null,
+    });
+  } catch (error) {
+    console.error('Get latest command error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+// Get pending commands for device - for ESP32 to poll (NEW)
+exports.getPendingCommands = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+
+    // Get device internal ID
+    const deviceCheck = await pool.query(
+      'SELECT id FROM devices WHERE device_id = $1',
+      [deviceId]
+    );
+
+    if (deviceCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    const internalDeviceId = deviceCheck.rows[0].id;
+
+    // Get pending commands
+    const result = await pool.query(
+      `SELECT * FROM device_commands 
+       WHERE device_id = $1 AND status = 'pending'
+       ORDER BY created_at ASC`,
+      [internalDeviceId]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Get pending commands error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+// Update command status - for ESP32 to confirm execution (NEW)
+exports.updateCommandStatus = async (req, res) => {
+  try {
+    const { commandId } = req.params;
+    const { status } = req.body;
+
+    if (!['executed', 'failed'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be "executed" or "failed"',
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE device_commands 
+       SET status = $1, executed_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [status, commandId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Command not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Command status updated',
       data: result.rows[0],
     });
   } catch (error) {
-    console.error('Set pump command error:', error);
+    console.error('Update command status error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',

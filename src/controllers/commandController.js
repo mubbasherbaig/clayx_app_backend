@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const pool = require('./database');
 
 // Get pending commands for a device (ESP32 polls this)
 exports.getPendingCommands = async (req, res) => {
