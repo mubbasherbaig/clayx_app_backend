@@ -166,3 +166,72 @@ exports.deleteDevice = async (req, res) => {
     });
   }
 };
+exports.getPumpCommand = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const deviceId = req.params.id;
+
+    const result = await pool.query(
+      'SELECT pump_command FROM devices WHERE device_id = $1 AND user_id = $2',
+      [deviceId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      pump: result.rows[0].pump_command || 'auto',
+    });
+  } catch (error) {
+    console.error('Get pump command error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
+
+// Set pump command for a device
+exports.setPumpCommand = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const deviceId = req.params.id;
+    const { pump } = req.body;
+
+    if (!['on', 'off', 'auto'].includes(pump)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid pump command. Use "on", "off", or "auto".',
+      });
+    }
+
+    const result = await pool.query(
+      'UPDATE devices SET pump_command = $1 WHERE device_id = $2 AND user_id = $3 RETURNING *',
+      [pump, deviceId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Pump command updated',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Set pump command error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+};
