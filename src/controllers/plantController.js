@@ -6,7 +6,10 @@ exports.getAllPlants = async (req, res) => {
     const userId = req.user.userId;
 
     const result = await pool.query(
-      `SELECT p.*, d.device_id, d.is_online, d.last_seen,
+      `SELECT p.*, 
+       d.device_id AS device_id_string,
+       d.is_online, 
+       d.last_seen,
        (SELECT temperature FROM sensor_readings WHERE plant_id = p.id ORDER BY timestamp DESC LIMIT 1) as temperature,
        (SELECT humidity FROM sensor_readings WHERE plant_id = p.id ORDER BY timestamp DESC LIMIT 1) as humidity,
        (SELECT soil_moisture FROM sensor_readings WHERE plant_id = p.id ORDER BY timestamp DESC LIMIT 1) as soil_moisture,
@@ -39,7 +42,7 @@ exports.getPlantById = async (req, res) => {
     const plantId = req.params.id;
 
     const result = await pool.query(
-      `SELECT p.*, d.device_id, d.is_online, d.last_seen
+      `SELECT p.*, d.device_id AS device_id_string, d.is_online, d.last_seen
        FROM plants p
        LEFT JOIN devices d ON p.device_id = d.id
        WHERE p.id = $1 AND p.user_id = $2`,
