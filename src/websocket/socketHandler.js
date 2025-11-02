@@ -114,6 +114,30 @@ module.exports = (io) => {
         }
       });
 
+      socket.on('join_device_room', async (data) => {
+        const { deviceId } = data;
+        socket.join(`device:${deviceId}`);
+        console.log(`[WS] User ${userId} joined device room: ${deviceId}`);
+        
+        // Send acknowledgment with current device status
+        try {
+          const deviceResult = await pool.query(
+            'SELECT is_online, last_seen FROM devices WHERE device_id = $1',
+            [deviceId]
+          );
+          
+          if (deviceResult.rows.length > 0) {
+            socket.emit('device_status', {
+              deviceId,
+              isOnline: deviceResult.rows[0].is_online,
+              lastSeen: deviceResult.rows[0].last_seen
+            });
+          }
+        } catch (error) {
+          console.error('[WS] Error getting device status:', error);
+        }
+      });
+
       // Handle command acknowledgment from ESP32
       socket.on('command_executed', async (data) => {
         console.log(`[WS] Command executed by ${deviceId}:`, data);
